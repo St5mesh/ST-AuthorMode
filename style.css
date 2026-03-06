@@ -6,7 +6,12 @@
 /* --- Overlay root --- */
 #am-overlay {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
     z-index: 10000;
     display: none;
     flex-direction: column;
@@ -14,6 +19,7 @@
     color: #ddd;
     font-family: 'Segoe UI', system-ui, sans-serif;
     font-size: 14px;
+    box-sizing: border-box;
 }
 
 #am-overlay.am-visible {
@@ -70,6 +76,7 @@
     flex: 1;
     overflow: hidden;
     min-height: 0;
+    height: 0; /* combined with flex:1, forces the grid to actually stretch */
 }
 
 /* === LEFT PANE: Chat History === */
