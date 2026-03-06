@@ -1,0 +1,337 @@
+/* ============================================================
+   Author Mode Extension - style.css
+   Layout: fixed overlay → header + 3-pane grid
+   ============================================================ */
+
+/* --- Overlay root --- */
+#am-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+    flex-direction: column;
+    background: #12121e;
+    color: #ddd;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+}
+
+#am-overlay.am-visible {
+    display: flex;
+}
+
+/* --- Header bar --- */
+#am-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 18px;
+    background: #1c1c30;
+    border-bottom: 1px solid #2a2a45;
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+#am-header-title {
+    font-size: 1em;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: #c9a0f5;
+    user-select: none;
+}
+
+#am-header-status {
+    flex: 1;
+    font-size: 0.78em;
+    color: #777;
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#am-close {
+    background: transparent;
+    border: 1px solid #444;
+    color: #aaa;
+    padding: 3px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+#am-close:hover { background: #8b2020; border-color: #8b2020; color: #fff; }
+
+/* --- 3-pane body --- */
+#am-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* === LEFT PANE: Chat History === */
+#am-chat-pane {
+    display: flex;
+    flex-direction: column;
+    border-right: 2px solid #2a2a45;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.am-pane-header {
+    padding: 8px 14px;
+    background: #1c1c30;
+    border-bottom: 1px solid #2a2a45;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #888;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+#am-chat-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 8px;
+}
+
+.am-chat-item {
+    padding: 9px 12px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+    background: #1c1c30;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: border-color 0.12s, background 0.12s;
+}
+.am-chat-item:hover { border-color: #3a3a55; }
+.am-chat-item.am-selected {
+    border-color: #c9a0f5;
+    background: #22203a;
+}
+
+.am-msg-sender {
+    font-size: 0.75em;
+    font-weight: 700;
+    color: #c9a0f5;
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.am-msg-sender.am-user-sender { color: #7ab8f5; }
+
+.am-msg-preview {
+    font-size: 0.8em;
+    color: #999;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.am-img-badge {
+    font-size: 0.85em;
+    opacity: 0.8;
+}
+
+/* === RIGHT PANE === */
+#am-right-pane {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* === UPPER RIGHT: Story Beats === */
+#am-beats-pane {
+    display: flex;
+    flex-direction: column;
+    border-bottom: 2px solid #2a2a45;
+    overflow: hidden;
+    min-height: 0;
+}
+
+#am-beats-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 8px;
+}
+
+.am-beat-item {
+    padding: 8px 12px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+    background: #1c1c30;
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-size: 0.82em;
+    line-height: 1.45;
+    transition: border-color 0.12s, background 0.12s;
+    color: #ccc;
+}
+.am-beat-item:hover { border-color: #3a3a55; }
+.am-beat-item.am-selected {
+    border-color: #f5c842;
+    background: #252218;
+    color: #f0f0f0;
+}
+.am-beat-item.am-expanded {
+    border-left: 3px solid #4caf80;
+}
+
+.am-beat-num {
+    color: #666;
+    margin-right: 6px;
+    font-size: 0.9em;
+}
+
+#am-beats-footer {
+    padding: 6px 14px;
+    font-size: 0.72em;
+    color: #666;
+    border-top: 1px solid #2a2a45;
+    flex-shrink: 0;
+    min-height: 26px;
+}
+
+/* === LOWER RIGHT: Prose Output === */
+#am-prose-pane {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+#am-prose-controls {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+#am-prose-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    line-height: 1.8;
+    font-size: 0.88em;
+    white-space: pre-wrap;
+    word-break: break-word;
+    outline: none;
+    color: #ddd;
+    caret-color: #c9a0f5;
+}
+
+#am-prose-content:empty::before {
+    content: attr(data-placeholder);
+    color: #444;
+    font-style: italic;
+    pointer-events: none;
+}
+
+#am-prose-footer {
+    padding: 6px 14px;
+    font-size: 0.72em;
+    color: #666;
+    border-top: 1px solid #2a2a45;
+    flex-shrink: 0;
+    min-height: 26px;
+}
+
+/* --- Shared button style --- */
+.am-btn {
+    background: #252540;
+    border: 1px solid #3a3a55;
+    color: #ccc;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.78em;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    white-space: nowrap;
+}
+.am-btn:hover:not(:disabled) { background: #3a3a66; color: #fff; border-color: #5a5a88; }
+.am-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.am-btn-primary {
+    background: #3a2a60;
+    border-color: #6a4aaa;
+    color: #ddc0ff;
+}
+.am-btn-primary:hover:not(:disabled) { background: #5a3a90; border-color: #9a6aee; }
+
+.am-btn-danger:hover:not(:disabled) { background: #6a2020; border-color: #aa4040; color: #ffcccc; }
+
+/* --- Generating spinner state --- */
+#am-overlay.am-generating .am-btn-primary { opacity: 0.5; cursor: wait; }
+
+.am-spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid #555;
+    border-top-color: #c9a0f5;
+    border-radius: 50%;
+    animation: am-spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 5px;
+}
+@keyframes am-spin { to { transform: rotate(360deg); } }
+
+/* --- Injected menu button --- */
+#am-menu-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: background 0.12s;
+    color: inherit;
+    width: 100%;
+    box-sizing: border-box;
+}
+#am-menu-entry:hover { background: rgba(201, 160, 245, 0.1); }
+
+/* --- Fallback floating button (if menu injection fails) --- */
+#am-float-btn {
+    position: fixed;
+    bottom: 70px;
+    left: 14px;
+    z-index: 9500;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #3a2a60;
+    border: 1px solid #6a4aaa;
+    color: #ddc0ff;
+    font-size: 1em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    transition: background 0.15s;
+}
+#am-float-btn:hover { background: #5a3a90; }
+
+/* --- Scrollbar styling --- */
+#am-chat-list::-webkit-scrollbar,
+#am-beats-list::-webkit-scrollbar,
+#am-prose-content::-webkit-scrollbar { width: 5px; }
+#am-chat-list::-webkit-scrollbar-track,
+#am-beats-list::-webkit-scrollbar-track,
+#am-prose-content::-webkit-scrollbar-track { background: transparent; }
+#am-chat-list::-webkit-scrollbar-thumb,
+#am-beats-list::-webkit-scrollbar-thumb,
+#am-prose-content::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
