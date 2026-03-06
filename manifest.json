@@ -8,5 +8,5 @@
     "author": "author-mode",
     "version": "1.0.0",
     "homePage": "",
-    "auto_update": false
+    "auto_update": true 
 }
