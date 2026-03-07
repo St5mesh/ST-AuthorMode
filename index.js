@@ -24,6 +24,38 @@ import {
 const EXT_NAME = 'author-mode';
 const EXT_LABEL = '✍️ Author Mode';
 
+// Persistent logging using localStorage
+const LOG_STORAGE_KEY = 'authorModeLogs';
+
+function loadLogs() {
+    try {
+        const logs = localStorage.getItem(LOG_STORAGE_KEY);
+        return logs ? JSON.parse(logs) : [];
+    } catch (e) {
+        console.error(`[${EXT_NAME}] Failed to load logs:`, e);
+        return [];
+    }
+}
+
+function saveLogs(logs) {
+    try {
+        localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
+    } catch (e) {
+        console.error(`[${EXT_NAME}] Failed to save logs:`, e);
+    }
+}
+
+function appendLog(entry) {
+    const logs = loadLogs();
+    logs.push({ ...entry, timestamp: new Date().toISOString() });
+    saveLogs(logs);
+}
+
+function clearLogs() {
+    localStorage.removeItem(LOG_STORAGE_KEY);
+}
+
+
 // ============================================================
 // STATE
 // ============================================================
@@ -48,6 +80,9 @@ const state = {
     prose: '',              // current prose content (synced from contenteditable)
     undoStack: [],          // string[] — previous prose states for undo
     lastExpansionPreState: null, // prose state before the most recent expansion (for regen)
+
+    // Logs
+    logs: loadLogs(),
 };
 
 // ============================================================
@@ -151,6 +186,40 @@ function getNextContext(beatIdx) {
 }
 
 // ============================================================
+// PROSE/POV/BEATS HELPERS
+// ============================================================
+
+/**
+ * Returns a trail of prose for a given beat index.
+ * Useful for debugging or showing expansion history.
+ */
+function getProseTrail(beatIdx) {
+    if (!state.proseHistory || !Array.isArray(state.proseHistory)) return [];
+    return state.proseHistory.filter(entry => entry.beatIdx === beatIdx).map(entry => entry.prose);
+}
+
+/**
+ * Detects the point-of-view (POV) in a prose string.
+ * Returns 'first', 'second', 'third', or 'unknown'.
+ */
+function detectPOV(prose) {
+    if (/\bI\b|\bme\b|\bmy\b|\bmine\b/.test(prose)) return 'first';
+    if (/\byou\b|\byour\b|\byours\b/.test(prose)) return 'second';
+    if (/\bhe\b|\bshe\b|\bthey\b|\bhis\b|\bher\b|\btheir\b/.test(prose)) return 'third';
+    return 'unknown';
+}
+
+/**
+ * Calculates the maximum number of beats allowed for expansion.
+ * Returns a number based on config or defaults.
+ */
+function calcMaxBeats() {
+    if (state.maxBeats) return state.maxBeats;
+    // Default: 10 beats per chapter
+    return 10;
+}
+
+// ============================================================
 // OVERLAY HTML CONSTRUCTION
 // ============================================================
 
@@ -160,6 +229,7 @@ function buildOverlayHTML() {
     <span id="am-header-title">${EXT_LABEL}</span>
     <span id="am-header-status"></span>
     <button id="am-close" class="am-btn" title="Close Author Mode">✕ Close</button>
+    <button id="am-debug-toggle" class="am-btn" title="Toggle Debug Panel">🐞 Debug</button>
 </div>
 <div id="am-body">
 
@@ -198,6 +268,7 @@ function buildOverlayHTML() {
                     <button id="am-clear-prose-btn" class="am-btn am-btn-danger" title="Clear all prose">✕ Clear</button>
                     <button id="am-save-btn"   class="am-btn" title="Save prose as .txt">💾 Save</button>
                     <button id="am-export-btn" class="am-btn" title="Export as formatted HTML">📄 Export</button>
+                    <button id="am-download-log-btn" class="am-btn" title="Download session log">📝 Download Log</button>
                 </div>
             </div>
             <div
@@ -207,6 +278,12 @@ function buildOverlayHTML() {
                 data-placeholder="Select a story beat above to expand it into prose…"
             ></div>
             <div id="am-prose-footer"></div>
+        </div>
+
+        <!-- DEBUG PANEL -->
+        <div id="am-debug-panel" style="display:none;padding:10px;background:#222;color:#fff;border-radius:6px;margin-top:10px">
+            <h3 style="margin-top:0">Debug Panel</h3>
+            <div id="am-debug-content">Debug info will appear here.</div>
         </div>
 
     </div>
@@ -255,6 +332,12 @@ function bindOverlayEvents(overlay) {
     // Close button
     overlay.querySelector('#am-close').addEventListener('click', hideAuthorMode);
 
+    // Debug toggle
+    overlay.querySelector('#am-debug-toggle').addEventListener('click', () => {
+        const panel = overlay.querySelector('#am-debug-panel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+
     // Extract beats
     overlay.querySelector('#am-extract-btn').addEventListener('click', handleExtractBeats);
 
@@ -269,6 +352,26 @@ function bindOverlayEvents(overlay) {
         setBtn('am-regen-btn', true);
     });
 
+    // Debug toggle
+    const debugToggle = overlay.querySelector('#am-debug-toggle');
+    if (debugToggle) {
+        debugToggle.addEventListener('click', () => {
+            state.debug = !state.debug;
+            appendLog(`Debug mode ${state.debug ? 'enabled' : 'disabled'}`);
+setHeaderStatus(`Debug mode ${state.debug ? 'enabled' : 'disabled'}.`);
+        });
+    }
+
+    // Clear debug log
+    const debugClear = overlay.querySelector('#am-debug-clear');
+    if (debugClear) {
+        debugClear.addEventListener('click', () => {
+            state.debugLog = [];
+            appendLog('Debug log cleared by user action');
+setHeaderStatus('Debug log cleared.');
+        });
+    }
+
     // Undo
     overlay.querySelector('#am-undo-btn').addEventListener('click', handleUndo);
 
@@ -280,7 +383,8 @@ function bindOverlayEvents(overlay) {
         pushUndo();
         state.prose = '';
         updateProseDisplay();
-        setProseStatus('Prose cleared.');
+        appendLog('User cleared prose content');
+setProseStatus('Prose cleared.');
         state.expandedBeatIdxs.clear();
         renderBeats(); // re-render to remove am-expanded class
     });
@@ -290,6 +394,9 @@ function bindOverlayEvents(overlay) {
 
     // Export
     overlay.querySelector('#am-export-btn').addEventListener('click', handleExport);
+
+    // Download Log
+    overlay.querySelector('#am-download-log-btn').addEventListener('click', handleDownloadLog);
 
     // Sync prose edits back to state
     overlay.querySelector('#am-prose-content').addEventListener('input', () => {
@@ -348,6 +455,7 @@ function renderChatList() {
 
 function selectMessage(idx) {
     state.selectedMsgIdx = idx;
+    appendLog({ type: 'event', event: 'select-message', messageIdx: idx });
 
     // Update selection highlight
     document.querySelectorAll('.am-chat-item').forEach(el => {
@@ -359,7 +467,8 @@ function selectMessage(idx) {
     state.expandedBeatIdxs.clear();
     state.selectedBeatIdx = null;
     renderBeats();
-    setBeatsStatus('Message selected. Click "Extract Beats" to analyse.');
+    appendLog('User selected message for beat extraction');
+setBeatsStatus('Message selected. Click "Extract Beats" to analyse.');
 
     setBtn('am-extract-btn', false);   // enable
     setBtn('am-clear-beats-btn', true); // disable (nothing to clear yet)
@@ -437,8 +546,15 @@ async function handleExtractBeats() {
     setBeatsStatus('⏳ Extracting story beats…');
 
     try {
+        const maxBeats = calcMaxBeats();
         const prompt = promptExtractBeats(message.mes);
+        appendLog(`Beat extraction prompt: ${JSON.stringify(prompt)}`);
+console.log(`[${EXT_NAME}] Beat extraction prompt:`, prompt);
+        appendLog({ type: 'prompt', content: prompt, event: 'beat-extraction', messageIdx: state.selectedMsgIdx });
         const raw = await generateQuietPrompt(prompt, false, false);
+        appendLog(`Beat extraction response: ${JSON.stringify(raw)}`);
+console.log(`[${EXT_NAME}] Beat extraction response:`, raw);
+        appendLog({ type: 'response', content: raw, event: 'beat-extraction', messageIdx: state.selectedMsgIdx });
 
         if (!raw || !raw.trim()) {
             setBeatsStatus('No response from LLM. Check your connection/model.');
@@ -449,12 +565,20 @@ async function handleExtractBeats() {
 
         if (state.beats.length === 0) {
             setBeatsStatus('Could not parse beats from response. The model may have returned an unexpected format.');
-            console.warn(`[${EXT_NAME}] Raw beat response:`, raw);
+            appendLog(`Beat extraction warning: ${JSON.stringify(raw)}`);
+console.warn(`[${EXT_NAME}] Raw beat response:`, raw);
             return;
         }
 
+        // Limit beats to maxBeats
+        if (state.beats.length > maxBeats) {
+            state.beats = state.beats.slice(0, maxBeats);
+            setBeatsStatus(`Extracted ${state.beats.length} beats (limited to max ${maxBeats}). Click any beat to expand it into prose.`);
+        } else {
+            setBeatsStatus(`${state.beats.length} beats extracted. Click any beat to expand it into prose.`);
+        }
+
         renderBeats();
-        setBeatsStatus(`${state.beats.length} beats extracted. Click any beat to expand it into prose.`);
 
     } catch (err) {
         console.error(`[${EXT_NAME}] Beat extraction failed:`, err);
@@ -476,13 +600,46 @@ async function expandBeatCore(beatIdx) {
     setProseStatus(`⏳ Expanding beat ${beatIdx + 1}…`);
     setBeatsStatus(`Expanding beat ${beatIdx + 1} of ${state.beats.length}…`);
 
+    // Debug logging
+    appendLog(`Beat expansion started for beatIdx: ${beatIdx}`);
+console.debug(`[${EXT_NAME}] expandBeatCore called for beatIdx:`, beatIdx);
+    console.debug(`[${EXT_NAME}] prev:`, prev);
+    console.debug(`[${EXT_NAME}] beat:`, beat);
+    console.debug(`[${EXT_NAME}] next:`, next);
+
     const prompt = promptExpandBeat(prev, beat, next);
+    appendLog({ type: 'prompt', content: prompt, event: 'beat-expansion', beatIdx });
     const result = await generateQuietPrompt(prompt, false, false);
+    appendLog({ type: 'response', content: result, event: 'beat-expansion', beatIdx });
 
     if (!result || !result.trim()) {
         setProseStatus('No response from LLM. Try again.');
+        console.debug(`[${EXT_NAME}] No result from LLM.`);
         return false;
     }
+
+    // POV detection (simple heuristic: look for "I" or character names)
+    let pov = null;
+    if (/\bI\b/.test(result)) {
+        pov = 'first-person';
+    } else if (/\bhe\b|\bshe\b|\bthey\b/i.test(result)) {
+        pov = 'third-person';
+    } else {
+        pov = 'unknown';
+    }
+    console.debug(`[${EXT_NAME}] POV detected:`, pov);
+
+    // Prose trail: record each expansion
+    if (!state.proseTrail) state.proseTrail = [];
+    state.proseTrail.push({
+        beatIdx,
+        beat,
+        prose: result.trim(),
+        pov,
+        timestamp: Date.now()
+    });
+    appendLog(`Prose trail updated: ${JSON.stringify(state.proseTrail)}`);
+console.debug(`[${EXT_NAME}] Prose trail updated.`, state.proseTrail);
 
     // Record pre-append state for regen to restore to
     state.lastExpansionPreState = state.prose;
@@ -528,7 +685,8 @@ function handleUndo() {
     state.prose = state.undoStack.pop();
     updateProseDisplay();
     setBtn('am-undo-btn', state.undoStack.length === 0);
-    setProseStatus('Undone.');
+    appendLog('User performed undo action');
+setProseStatus('Undone.');
 }
 
 /**
@@ -566,7 +724,29 @@ function handleSave() {
         return;
     }
     downloadBlob(content, 'text/plain', `author-mode-${timestamp()}.txt`);
-    setProseStatus('Saved as .txt');
+    appendLog('User saved prose as .txt');
+setProseStatus('Saved as .txt');
+}
+
+function handleDownloadLog() {
+    // Export session log from browser storage as .txt
+    let log = '';
+    try {
+        // Try localStorage first
+        log = localStorage.getItem('author-mode-session-log') || '';
+        if (!log) {
+            // Try sessionStorage as fallback
+            log = sessionStorage.getItem('author-mode-session-log') || '';
+        }
+    } catch (e) {
+        log = '';
+    }
+    if (!log.trim()) {
+        setProseStatus('No session log found.');
+        return;
+    }
+    downloadBlob(log, 'text/plain', `author-mode-session-log-${timestamp()}.txt`);
+    setProseStatus('Session log downloaded.');
 }
 
 function handleExport() {
@@ -604,7 +784,8 @@ ${paragraphs}
 </html>`;
 
     downloadBlob(html, 'text/html', `author-mode-${timestamp()}.html`);
-    setProseStatus('Exported as .html');
+    appendLog('User exported prose as .html');
+setProseStatus('Exported as .html');
 }
 
 // ============================================================
@@ -718,7 +899,8 @@ function injectMenuEntry() {
         wrapper.className = 'list-group-item';
         wrapper.appendChild(entry);
         optionsBar.appendChild(wrapper);
-        console.log(`[${EXT_NAME}] Injected into #options_bar`);
+        appendLog(`Injected into #options_bar`);
+console.log(`[${EXT_NAME}] Injected into #options_bar`);
         return true;
     }
 
@@ -736,7 +918,8 @@ function injectMenuEntry() {
         wrapper.className = sibling.className;
         wrapper.appendChild(entry);
         sibling.parentElement.appendChild(wrapper);
-        console.log(`[${EXT_NAME}] Injected alongside sibling: "${sibling.textContent.trim().slice(0, 30)}"`);
+        appendLog(`Injected alongside sibling: "${sibling.textContent.trim().slice(0, 30)}"`);
+console.log(`[${EXT_NAME}] Injected alongside sibling: "${sibling.textContent.trim().slice(0, 30)}"`);
         return true;
     }
 
@@ -747,7 +930,8 @@ function injectMenuEntry() {
         wrapper.style.cssText = 'padding:4px 8px';
         wrapper.appendChild(entry);
         leftPanel.appendChild(wrapper);
-        console.log(`[${EXT_NAME}] Injected into #left-nav-panel`);
+        appendLog(`Injected into #left-nav-panel`);
+console.log(`[${EXT_NAME}] Injected into #left-nav-panel`);
         return true;
     }
 
@@ -773,7 +957,8 @@ function injectFloatBtn() {
 // ============================================================
 
 jQuery(async () => {
-    console.log(`[${EXT_NAME}] Initialising…`);
+    appendLog(`Extension initialising`);
+console.log(`[${EXT_NAME}] Initialising…`);
 
     // Guard: verify generateQuietPrompt is available before proceeding
     if (typeof generateQuietPrompt !== 'function') {
@@ -818,6 +1003,7 @@ jQuery(async () => {
             state.selectedBeatIdx = null;
             state.prose = '';
             state.undoStack = [];
+            state.debugLog = [];
             updateProseDisplay();
             renderBeats();
             renderChatList();
@@ -832,5 +1018,6 @@ jQuery(async () => {
         }
     });
 
-    console.log(`[${EXT_NAME}] Ready.`);
+    appendLog(`Extension ready`);
+console.log(`[${EXT_NAME}] Ready.`);
 });
