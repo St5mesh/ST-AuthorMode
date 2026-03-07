@@ -112,19 +112,24 @@ ${chapterText}
  * Beat expansion: expand one beat into prose given surrounding context.
  * prev/next are either adjacent beats or boundary signals.
  */
-function promptExpandBeat(prevContext, currentBeat, nextContext) {
-    return `You are a literary novelist. Expand the following story beat into immersive, flowing prose.
-
-Previous context: ${prevContext}
-Current beat: ${currentBeat}
-Next context: ${nextContext}
-
-Write 2–4 paragraphs of rich, continuous literary prose that:
-- Flows naturally from the previous context
-- Fully develops the current beat with scene, character, and atmosphere
-- Transitions naturally toward the next context
-
-Return ONLY the prose. No labels, no commentary, no preamble.`;
+function promptExpandBeat(prevContext, currentBeat, nextContext, sourceText) {
+    // Hard POV rule (first line)
+    // Hard scope rule (source material block)
+    // Prose trail (if present)
+    // Beat context
+    // Output rules
+    // POV reminder (last line)
+    let povInstruction = 'RULE: Write exclusively in the detected point of view. Every sentence must maintain this point of view without exception.';
+    let scopeBoundary = `Source material (your expansion must be grounded exclusively in the events, characters, and details present in this text — do not introduce anything that is not either explicitly stated or directly implied here):\n---\n${sourceText}\n---`;
+    let proseTrailSection = '';
+    if (prevContext && prevContext.startsWith('[Previous beat]')) {
+        // If there is a prose trail, include it
+        proseTrailSection = `Recently written prose — do not restate, re-describe, or re-introduce anything already present in these paragraphs. Continue from where this ends:\n---\n${prevContext}\n---`;
+    }
+    let beatContext = `Current beat: ${currentBeat}\nNext context: ${nextContext}`;
+    let outputRules = 'Write 2–4 paragraphs of rich, continuous literary prose. Return ONLY the prose. No labels, no commentary, no preamble.';
+    let povReminder = 'Remember: maintain the detected point of view throughout. Do not shift perspective.';
+    return `${povInstruction}\n\n${scopeBoundary}\n\n${proseTrailSection ? proseTrailSection + '\n\n' : ''}${beatContext}\n\n${outputRules}\n\n${povReminder}`;
 }
 
 // ============================================================
@@ -596,18 +601,33 @@ async function expandBeatCore(beatIdx) {
     const beat = state.beats[beatIdx];
     const prev = getPrevContext(beatIdx);
     const next = getNextContext(beatIdx);
+    // Retrieve source message text once for both POV detection and scope boundary
+    const context = getContext();
+    const message = context.chat[state.selectedMsgIdx];
+    const sourceText = message && message.mes ? message.mes : '';
 
     setProseStatus(`⏳ Expanding beat ${beatIdx + 1}…`);
     setBeatsStatus(`Expanding beat ${beatIdx + 1} of ${state.beats.length}…`);
 
     // Debug logging
     appendLog(`Beat expansion started for beatIdx: ${beatIdx}`);
-console.debug(`[${EXT_NAME}] expandBeatCore called for beatIdx:`, beatIdx);
+    console.debug(`[${EXT_NAME}] expandBeatCore called for beatIdx:`, beatIdx);
     console.debug(`[${EXT_NAME}] prev:`, prev);
     console.debug(`[${EXT_NAME}] beat:`, beat);
     console.debug(`[${EXT_NAME}] next:`, next);
+    console.debug(`[${EXT_NAME}] sourceText:`, sourceText);
 
-    const prompt = promptExpandBeat(prev, beat, next);
+    // Log prompt structure for verification
+    console.debug(`[${EXT_NAME}] prompt structure:`, {
+        povInstruction: 'RULE: Write exclusively in the detected point of view. Every sentence must maintain this point of view without exception.',
+        scopeBoundary: `Source material (your expansion must be grounded exclusively in the events, characters, and details present in this text — do not introduce anything that is not either explicitly stated or directly implied here): --- ${sourceText} ---`,
+        proseTrailSection: prev && prev.startsWith('[Previous beat]') ? `Recently written prose — do not restate, re-describe, or re-introduce anything already present in these paragraphs. Continue from where this ends: --- ${prev} ---` : '',
+        beatContext: `Current beat: ${beat}\nNext context: ${next}`,
+        outputRules: 'Write 2–4 paragraphs of rich, continuous literary prose. Return ONLY the prose. No labels, no commentary, no preamble.',
+        povReminder: 'Remember: maintain the detected point of view throughout. Do not shift perspective.'
+    });
+
+    const prompt = promptExpandBeat(prev, beat, next, sourceText);
     appendLog({ type: 'prompt', content: prompt, event: 'beat-expansion', beatIdx });
     const result = await generateQuietPrompt(prompt, false, false);
     appendLog({ type: 'response', content: result, event: 'beat-expansion', beatIdx });
@@ -639,7 +659,7 @@ console.debug(`[${EXT_NAME}] expandBeatCore called for beatIdx:`, beatIdx);
         timestamp: Date.now()
     });
     appendLog(`Prose trail updated: ${JSON.stringify(state.proseTrail)}`);
-console.debug(`[${EXT_NAME}] Prose trail updated.`, state.proseTrail);
+    console.debug(`[${EXT_NAME}] Prose trail updated.`, state.proseTrail);
 
     // Record pre-append state for regen to restore to
     state.lastExpansionPreState = state.prose;
@@ -672,6 +692,8 @@ async function handleExpandBeat(beatIdx) {
     } catch (err) {
         console.error(`[${EXT_NAME}] Beat expansion failed:`, err);
         setProseStatus('Error during expansion — check browser console.');
+        setBeatsStatus('Expansion failed. Check the browser console for details.');
+        renderBeats();
     } finally {
         setGenerating(false);
     }
@@ -708,6 +730,8 @@ async function handleRegenerate() {
     } catch (err) {
         console.error(`[${EXT_NAME}] Regenerate failed:`, err);
         setProseStatus('Error during regeneration — check browser console.');
+        setBeatsStatus('Regeneration failed. Check the browser console for details.');
+        renderBeats();
     } finally {
         setGenerating(false);
     }
