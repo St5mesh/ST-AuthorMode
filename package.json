@@ -1,0 +1,11 @@
+{
+  "name": "author-mode-extension",
+  "version": "1.0.0",
+  "description": "SillyTavern Author Mode extension with modular JS for browser and Node.js compatibility",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test_prompt_structure.js"
+  },
+  "author": "st5mesh",
+  "license": "MIT"
+}
